@@ -3,7 +3,7 @@
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 
-from face_recognition.components import label, panel
+from UI.components import label, panel
 
 
 class SettingsPage(QWidget):
