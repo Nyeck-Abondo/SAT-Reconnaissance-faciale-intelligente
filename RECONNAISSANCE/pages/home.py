@@ -6,9 +6,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QProgressBar
 )
+from PyQt6.QtGui import QPixmap
 
 from UI.components import label, panel
-
+from faceRecognizer.webcamRecognizer import WebCamRecongnizer as wc
 
 class HomePage(QWidget):
 
@@ -33,9 +34,13 @@ class HomePage(QWidget):
 
         cam.addWidget(self.camera_placeholder)
 
+        #ajout et initialisatoin du thread de la camera
+        self.camera_thread = wc(encodings_path="encodings.pickle")
+                
+
         capture = QPushButton("Capturer")
         capture.setObjectName("primary")
-        capture.clicked.connect(self.simulate_capture)
+        capture.clicked.connect(self.Capture_Frame)
 
         reset = QPushButton("Réinitialiser")
         reset.clicked.connect(self.reset_result)
@@ -57,7 +62,6 @@ class HomePage(QWidget):
         result.addWidget(self.result_banner)
         result.addWidget(label("PROFIL IDENTIFIÉ", muted=True))
         result.addWidget(self.name_value)
-        result.addWidget(self.id_value)
         result.addWidget(self.score_value)
 
         self.progress = QProgressBar()
@@ -67,19 +71,19 @@ class HomePage(QWidget):
 
         layout.addWidget(result_panel, 3)
 
-    def simulate_capture(self):
-        self.result_banner.setText("Capture de démonstration")
-        self.name_value.setText(
-            "Nom : Utilisateur de démonstration"
-        )
-        self.id_value.setText("ID : ")
-        self.score_value.setText("Niveau de confiance : ")
+    def Begin_Capture(self, qt_image):
+        """ recoit une QImge du thread et l'affiche sur le QLabel"""
+        self.camera_placeholder.setPixmap(QPixmap.fromImage(qt_image))
         self.progress.setValue(0)
+
+    def Capture_Frame(self, qt_im):
+        """Foncton de lancement par le bouton"""
+        self.camera_thread.image_ready.connect(self.Begin_Capture)
+        self.camera_thread.start()
 
     def reset_result(self):
         self.result_banner.setText("En attente de reconnaissance")
-        self.name_value.setText("Nom : ")
-        self.id_value.setText("ID : ")
+        self.name_value.setText(self.camera_thread.Truename)
         self.score_value.setText("Niveau de confiance : ")
-        self.progress.setValue(0)
+        self.progress.setValue(int(self.camera_thread.Score))
         self.camera_placeholder.setText("PHOTOS / VIDEO")

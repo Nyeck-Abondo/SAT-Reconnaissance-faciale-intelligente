@@ -18,6 +18,8 @@ class WebCamRecongnizer(QThread):
         self.knowFaceEncoding       =   []
         self.knowFaceName           =   []
         self.running                =   True
+        self.Truename               =   ""
+        self.Score                  =   0
         self.loadData()
 
     def loadData(self):
@@ -42,43 +44,41 @@ class WebCamRecongnizer(QThread):
             if (not ret):
                 continue
 
-            if processFrame % 4 == 0:
+            # redimensionnement
+            resizedFrame = cv.resize(frame, (0, 0), fx= 0.5, fy=0.5)
+            rgbResizedFrame = cv.cvtColor(resizedFrame, cv.COLOR_BGR2RGB)
 
-                # redimensionnement
-                resizedFrame = cv.resize(frame, (0, 0), fx= 0.25, fy=0.25)
-                rgbResizedFrame = cv.cvtColor(resizedFrame, cv.COLOR_BGR2RGB)
-
-                # Detection de visages
-                faceLocation = face_recognition.face_locations(rgbResizedFrame)
-                faceEncoding = face_recognition.face_encodings(rgbResizedFrame, faceLocation)
-
-            processFrame += 1
+            # Detection de visages
+            faceLocation = face_recognition.face_locations(rgbResizedFrame, number_of_times_to_upsample=2)
+            faceEncoding = face_recognition.face_encodings(rgbResizedFrame, faceLocation)
             
             for (top, right, bottom, left), faceEnc in zip(faceLocation, faceEncoding):
-                name = "Inconnue / Unknow"
+                self.Truename = "Inconnue / Unknow"
                 confidence = ""
 
                 #comparaison des visages
-                compareResult = face_recognition.compare_faces(self.knowFaceEncoding, faceEnc)
+                compareResult = face_recognition.compare_faces(self.knowFaceEncoding, faceEnc, tolerance=0.55)
                 faceDistance = face_recognition.face_distance(self.knowFaceEncoding, faceEnc)
 
                 if len(faceDistance) > 0:
                     bestIndex = np.argmin(faceDistance)
                     if compareResult[bestIndex]:
-                        name = self.knowFaceName[bestIndex]
+                        self.Truename = self.knowFaceName[bestIndex]
                         # score de confiance
                         confidenceValue = (1 - faceDistance[bestIndex])
+                        self.Score = int(confidenceValue)
                         confidence = f"{confidenceValue:.1%}"
 
                 #repositionnement des coordonnees
-                top *= 4
-                left *= 4
-                right *= 4
-                bottom *= 4
+                top *= 2
+                left *= 2
+                right *= 2
+                bottom *= 2
 
                 #bounding box
+                
                 cv.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 3)
-                resultText = f"{name} {confidence}".strip()
+                resultText = f"{self.Truename} {confidence}".strip()
                 cv.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 255, 0), cv.FILLED)
                 font = cv.FONT_HERSHEY_DUPLEX
                 cv.putText(frame, resultText, (left + 6, bottom - 6), font, 0.6, (255, 255, 255), 1)
