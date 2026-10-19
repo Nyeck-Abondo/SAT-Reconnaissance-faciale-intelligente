@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QProgressBar
 )
 
-from face_recognition.components import label, panel
+from UI.components import label, panel
 
 
 class HomePage(QWidget):

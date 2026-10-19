@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QHeaderView, QMessageBox
 )
 
-from face_recognition.components import label, panel
+from UI.components import label, panel
 
 
 class DatabasePage(QWidget):
