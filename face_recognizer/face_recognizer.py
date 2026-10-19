@@ -95,6 +95,55 @@ def recognize_file(path, db_path, tolerance=DEFAULT_TOLERANCE, model="hog"):
     return rgb, recognize(rgb, names, encodings, tolerance, model)
 
 
+def recognize_frame(frame_bgr, known_names, known_encodings,
+                    tolerance=DEFAULT_TOLERANCE, model="hog", scale=0.5):
+
+    if frame_bgr is None or frame_bgr.size == 0:
+        return []
+    if not 0 < scale <= 1:
+        raise ValueError("scale doit être compris entre 0 (exclu) et 1")
+    small = frame_bgr if scale == 1 else cv2.resize(frame_bgr, (0, 0), fx=scale, fy=scale)
+    rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+    results = recognize(rgb, known_names, known_encodings, tolerance, model)
+    if scale != 1:
+        for r in results:
+            r["box"] = tuple(int(v / scale) for v in r["box"])
+    return results
+
+
+def annotate_frame(frame_bgr, results):
+    
+    img = frame_bgr.copy()
+    for r in results:
+        top, right, bottom, left = r["box"]
+        color = GREEN if r["name"] != UNKNOWN else RED
+        cv2.rectangle(img, (left, top), (right, bottom), color, 2)
+        label = f"{r['name']} {r['confidence']:.0f}%"
+        cv2.putText(img, label, (left, max(top - 8, 15)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+    return img
+
+
+class FaceRecognizer:
+
+    def __init__(self, db_path, tolerance=DEFAULT_TOLERANCE, model="hog"):
+        self.names, self.encodings = load_known_encodings(db_path)
+        self.model = model
+        self.set_tolerance(tolerance)
+
+    def set_tolerance(self, tolerance):
+        if not 0 < tolerance < 1:
+            raise ValueError("La tolérance doit être comprise entre 0 et 1")
+        self.tolerance = tolerance
+
+    
+    def process_image(self, path):
+        rgb = load_image(path)
+        results = recognize(rgb, self.names, self.encodings,
+                            self.tolerance, self.model)
+        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        return annotate_frame(bgr, results), results
+
 def main():
     parser = argparse.ArgumentParser(description="Reconnaissance faciale sur image")
     parser.add_argument("--image", required=True, help="chemin de l'image")
