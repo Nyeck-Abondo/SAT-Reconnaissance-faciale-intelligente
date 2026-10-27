@@ -71,11 +71,16 @@ class FaceRecognitionUI(QMainWindow):
         body.addWidget(self.stack, 1)
 
         # Ajout des pages
-        self.stack.addWidget(HomePage())
+        self.home_page = HomePage()
+        self.stack.addWidget(self.home_page)
         self.stack.addWidget(RecognitionPage(self.navigate))
         self.stack.addWidget(DatabasePage())
         self.stack.addWidget(SettingsPage())
         self.navigate(0)
+
+    def closeEvent(self, event):
+        self.home_page.shutdown()
+        super().closeEvent(event)
 
     def navigate(self, index):
         self.stack.setCurrentIndex(index)

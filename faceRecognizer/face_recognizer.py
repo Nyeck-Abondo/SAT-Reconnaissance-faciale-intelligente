@@ -7,7 +7,11 @@ import face_recognition
 import numpy as np
 
 UNKNOWN = "Inconnu"
-DEFAULT_TOLERANCE = 0.5   
+# Seuil calibré sur encodings.pickle : à 0.55 la majorité des visages d'une personne
+# "ressemblent" déjà à quelqu'un d'autre de la base -> les inconnus étaient reconnus à tort.
+DEFAULT_TOLERANCE = 0.42
+# Nombre d'encodages d'une même personne utilisés pour calculer sa distance (moyenne des k meilleurs)
+DEFAULT_K = 2
 
 def load_image(path):
     
@@ -52,20 +56,35 @@ def encode_faces(rgb, locations):
     return face_recognition.face_encodings(rgb, known_face_locations=locations)
 
 
-def distance_to_confidence(distance):
-    return max(0.0, 1.0 - distance) * 100
+def distance_to_confidence(distance, tolerance=DEFAULT_TOLERANCE):
+    """Convertit une distance en pourcentage : 50 % exactement au seuil de tolérance,
+    plus de 50 % = visage reconnu, moins de 50 % = visage inconnu."""
+    if distance is None:
+        return 0.0
+    rng = 1.0 - tolerance
+    lin = (1.0 - distance) / (rng * 2.0)
+    if distance > tolerance:
+        return max(0.0, lin) * 100
+    return min(100.0, (lin + (1.0 - lin) * ((lin - 0.5) * 2.0) ** 0.2) * 100)
 
 
-def match_face(encoding, known_names, known_encodings, tolerance=DEFAULT_TOLERANCE):
-
-    if not known_encodings:
+def match_face(encoding, known_names, known_encodings,
+               tolerance=DEFAULT_TOLERANCE, k=DEFAULT_K):
+    """Retourne (nom, distance). Le nom vaut UNKNOWN si aucune personne de la base
+    n'est assez proche. La distance d'une personne est la moyenne de ses k
+    meilleurs encodages, ce qui évite qu'une seule photo "chanceuse" valide un inconnu."""
+    if len(known_encodings) == 0:
         return UNKNOWN, None
     distances = face_recognition.face_distance(known_encodings, encoding)
-    best = int(np.argmin(distances))
-    dist = float(distances[best])
-    if dist <= tolerance:
-        return known_names[best], dist
-    return UNKNOWN, dist
+    names = np.asarray(known_names)
+    best_name, best_score = UNKNOWN, float("inf")
+    for name in np.unique(names):
+        score = float(np.sort(distances[names == name])[:k].mean())
+        if score < best_score:
+            best_name, best_score = str(name), score
+    if best_score <= tolerance:
+        return best_name, best_score
+    return UNKNOWN, best_score
 
 
 def recognize(rgb, known_names, known_encodings,
@@ -80,10 +99,12 @@ def recognize(rgb, known_names, known_encodings,
     results = []
     for box, enc in zip(locations, encodings):
         name, dist = match_face(enc, known_names, known_encodings, tolerance)
+        r_name = name
         results.append({
             "name": name,
             "distance": dist,
-            "confidence": distance_to_confidence(dist) if dist is not None else 0.0,
+            "confidence": (distance_to_confidence(dist, tolerance)
+                           if r_name != UNKNOWN else 0.0),
             "box": box,
         })
     return results

@@ -10,6 +10,7 @@ from PyQt6.QtGui import QPixmap
 
 from UI.components import label, panel
 from faceRecognizer.webcamRecognizer import WebCamRecongnizer as wc
+from faceRecognizer.face_recognizer import UNKNOWN
 
 class HomePage(QWidget):
 
@@ -36,7 +37,10 @@ class HomePage(QWidget):
 
         #ajout et initialisatoin du thread de la camera
         self.camera_thread = wc(encodings_path="encodings.pickle")
-                
+        # connexions faites UNE seule fois (avant, chaque clic sur "Capturer" en ajoutait une)
+        self.camera_thread.image_ready.connect(self.Begin_Capture)
+        self.camera_thread.result_ready.connect(self.update_result)
+
 
         capture = QPushButton("Capturer")
         capture.setObjectName("primary")
@@ -73,17 +77,43 @@ class HomePage(QWidget):
 
     def Begin_Capture(self, qt_image):
         """ recoit une QImge du thread et l'affiche sur le QLabel"""
+        if not self.camera_thread.isRunning():
+            return  # image tardive reçue après l'arrêt de la caméra
         self.camera_placeholder.setPixmap(QPixmap.fromImage(qt_image))
-        self.progress.setValue(0)
+
+    def update_result(self, name, confidence):
+        """Affiche le résultat de reconnaissance (visage le plus grand de l'image)"""
+        if not name:
+            self.result_banner.setText("Aucun visage détecté")
+            self.name_value.setText("Nom : —")
+            self.score_value.setText("Niveau de confiance : —")
+            self.progress.setValue(0)
+        elif name == UNKNOWN:
+            self.result_banner.setText("Visage inconnu")
+            self.name_value.setText("Nom : Inconnu")
+            self.score_value.setText("Niveau de confiance : —")
+            self.progress.setValue(0)
+        else:
+            self.result_banner.setText("Visage reconnu")
+            self.name_value.setText(f"Nom : {name}")
+            self.score_value.setText(f"Niveau de confiance : {confidence:.0f} %")
+            self.progress.setValue(int(confidence))
 
     def Capture_Frame(self, qt_im):
         """Foncton de lancement par le bouton"""
-        self.camera_thread.image_ready.connect(self.Begin_Capture)
-        self.camera_thread.start()
+        if not self.camera_thread.isRunning():
+            self.camera_thread.start()
 
     def reset_result(self):
+        self.camera_thread.stop()
         self.result_banner.setText("En attente de reconnaissance")
-        self.name_value.setText(self.camera_thread.Truename)
+        self.name_value.setText("Nom : ")
         self.score_value.setText("Niveau de confiance : ")
-        self.progress.setValue(int(self.camera_thread.Score))
+        self.progress.setValue(0)
+        self.camera_placeholder.clear()
         self.camera_placeholder.setText("PHOTOS / VIDEO")
+
+    def shutdown(self):
+        """Arrête la caméra (appelé à la fermeture de la fenêtre)"""
+        if self.camera_thread.isRunning():
+            self.camera_thread.stop()
